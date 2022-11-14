@@ -1,7 +1,7 @@
 # text-as-data-in-R
 
 This repository contains the materials for a course 
-It includes the slides `xy.pdf`, several example text data sets `xy.csv`, and a R scripts `xy.Rmd`.
+It includes the slides, example text data sets, and R scripts `xy.Rmd`.
 
 ## Workshop Outline
 
