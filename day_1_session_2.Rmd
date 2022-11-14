@@ -270,7 +270,7 @@ unknown_1
 We need to estimate, according to the Multinomial Distribution, the following equation:
 
 $$
-P(b=0, c=0, f=2, i=1) = \frac{3!}{0!0!2!1!}0.58^{0}\times 0.33^{0} \times 0.8^2 \times 0^1
+P(b=0, c=0, f=2, i=1) = \frac{3!}{0!0!2!1!}0.58^{0}\times 0.33^{0} \times 0.08^2 \times 0^1
 $$
 
 Let's deal with the 
@@ -312,20 +312,20 @@ first_part <- factorial(3) / (factorial(0) * factorial(0) * factorial(2) * facto
 Now, let's do this part:
 
 $$
-0.58^{0}\times 0.33^{0} \times 0.8^2 \times 0^1
+0.58^{0}\times 0.33^{0} \times 0.08^2 \times 0^1
 $$
 
-This is fairly straitghtforward:
+This is fairly straightforward:
 
 ```{r}
-0.58^0 * 0.33^0 * 0.8^2 * 0^1
+0.58^0 * 0.33^0 * 0.08^2 * 0^1
 ```
 
 If you are paying attention, you kinda know where this is going...
 Let's save the second part as well:
 
 ```{r}
-second_part <- 0.58^0 * 0.33^0 * 0.8^2 * 0^1
+second_part <- 0.58^0 * 0.33^0 * 0.08^2 * 0^1
 ```
 
 And now, just multiply them:
@@ -357,11 +357,11 @@ first_part
 Second part:
 
 $$
-0.58^{2}\times 0.33^{2} \times 0.8^0 \times 0^0
+0.58^{2}\times 0.33^{2} \times 0.08^0 \times 0^0
 $$
 
 ```{r}
-second_part <- 0.58^2 * 0.33^2 * 0.8^0 * 0^0
+second_part <- 0.58^2 * 0.33^2 * 0.08^0 * 0^0
 ```
 
 (also, with a bit of *r-fu*, you can vectorize these operations, for example:)

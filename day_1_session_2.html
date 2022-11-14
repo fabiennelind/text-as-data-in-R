@@ -562,7 +562,7 @@ belonging to <code>John</code>.</p>
 following equation:</p>
 <p><span class="math display">\[
 P(b=0, c=0, f=2, i=1) = \frac{3!}{0!0!2!1!}0.58^{0}\times 0.33^{0}
-\times 0.8^2 \times 0^1
+\times 0.08^2 \times 0^1
 \]</span></p>
 <p>Let’s deal with the</p>
 <p><span class="math display">\[\frac{3!}{0!0!2!1!}\]</span></p>
@@ -586,14 +586,14 @@ basically</p>
 <pre class="r"><code>first_part &lt;- factorial(3) / (factorial(0) * factorial(0) * factorial(2) * factorial(1))</code></pre>
 <p>Now, let’s do this part:</p>
 <p><span class="math display">\[
-0.58^{0}\times 0.33^{0} \times 0.8^2 \times 0^1
+0.58^{0}\times 0.33^{0} \times 0.08^2 \times 0^1
 \]</span></p>
-<p>This is fairly straitghtforward:</p>
-<pre class="r"><code>0.58^0 * 0.33^0 * 0.8^2 * 0^1</code></pre>
+<p>This is fairly straightforward:</p>
+<pre class="r"><code>0.58^0 * 0.33^0 * 0.08^2 * 0^1</code></pre>
 <pre><code>## [1] 0</code></pre>
 <p>If you are paying attention, you kinda know where this is going…
 Let’s save the second part as well:</p>
-<pre class="r"><code>second_part &lt;- 0.58^0 * 0.33^0 * 0.8^2 * 0^1</code></pre>
+<pre class="r"><code>second_part &lt;- 0.58^0 * 0.33^0 * 0.08^2 * 0^1</code></pre>
 <p>And now, just multiply them:</p>
 <pre class="r"><code>first_part * second_part</code></pre>
 <pre><code>## [1] 0</code></pre>
@@ -613,9 +613,9 @@ first_part</code></pre>
 <pre><code>## [1] 6</code></pre>
 <p>Second part:</p>
 <p><span class="math display">\[
-0.58^{2}\times 0.33^{2} \times 0.8^0 \times 0^0
+0.58^{2}\times 0.33^{2} \times 0.08^0 \times 0^0
 \]</span></p>
-<pre class="r"><code>second_part &lt;- 0.58^2 * 0.33^2 * 0.8^0 * 0^0</code></pre>
+<pre class="r"><code>second_part &lt;- 0.58^2 * 0.33^2 * 0.08^0 * 0^0</code></pre>
 <p>(also, with a bit of <em>r-fu</em>, you can vectorize these
 operations, for example:)</p>
 <pre class="r"><code>prod(probs_john ^ unknown_2)</code></pre>
