@@ -1,0 +1,353 @@
+---
+title: "Day1_RBasics.Rmd"
+author: Philipp Masur & Frank M. Schneider, with some edits by Fabienne Lind & Petro Tolochko
+output: html_document
+date: "2022-11-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# R and RStudio
+
+## the structure of RStudio
+
+The R programming language does come with its own user interface which in itself is adequate for modest applications. Larger applications (and most statistical analyses for that matter) are rather unwieldy in the basic R user interface. There are many useful editors available, but at this time, RStudio is by far the most popular one. RStudio provides much more options and makes working with R a lot easier. By default, we are currently seeing four cells (The order of those cells can be changed via Tools > Global Options > Pane Layout). 
+
+1. Lower left: **Console**. This window is a classical command-line interface. This means that it is constantly attentive to you commands. We can type any R code chunk after the promt-sign ">" and run it directly with "Enter". We will use this cell mostly as our "Output-Window". There is also the option to use the RStudio terminal (next to the console tab), after being activated it is possible to execute files in the terminal directly from within RStudio (see: https://support.posit.co/hc/en-us/articles/115010737148-Using-the-RStudio-Terminal-in-the-RStudio-IDE).
+
+2. Upper left: **Editor**. Whenever we load scripts, they will appear in this cell (just like this script). To run a line of code, you only need to click on the respective line and hit "CRTL+ENTER" (Windows) or "CMD-Enter" (Mac).
+
+3. Upper right: **Workspace and history**. This cell has usually two tabs called **Environment** and **History**. The environment will show all data, objects, values, or functions that we might have loaded. You can click on each item to see its content. The history will shows all commands that have been executed since the start of the R session.
+
+4. Lower right: **Files, Plots, Packages, Help**. In this cell, several things can be assessed. First, the tab **Files** shows your local environment. It is usually helpful to keep all your files in one folder and tell are that this is where you are working in. Figures and other graphical outputs will be shown in **Plots**. You can further assess all packages that are installed and a comprehensive help library. 
+
+## File formats
+
+### Simple scripts (`.r`)
+
+Files which end with `.r` can be considered the most basic form of a script (You can open a new simple script by clicking File > New File > R Script). In such files, we can only write R code. If we want to add comments or structure the code with headings, we need to mark them as such by a preceeding *#*. 
+
+### Markdown-files (`.rmd`)
+
+Right now, we are working in a script that uses a basic formatting language called *RMarkdown*. This allows us to write plain text, include headings, and also several code chunks. Code chunks beginn with ```{r} and end with ```. In between these codes, we can write and run R code. 
+
+You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+
+However, that means that all plain test (e.g., comments) need to be preceded by a *#*. RMarkdown-Files can be used to create HTML, PDF, and MS Word documents, dashboards, books, shiny applications. For more details on using R Markdown see <http://rmarkdown.rstudio.com>. A cheatsheet is available here: https://raw.githubusercontent.com/rstudio/cheatsheets/main/rmarkdown-2.0.pdf
+
+While writing text, we can mark headings with a *#* (more *#* creates subheadings), format a word as italic by framing it with ** and as bold by framing it with *. 
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
+
+# Fundamentals of R
+
+## Simple arithmetic
+
+It is important to understand that R is nothing but a very powerful calculator. The most basic code is hence a simple mathematic operation. Of course, we can use parantheses as well. 
+
+```{r}
+153 + 5 / 2
+(153 + 5) / 2
+```
+
+
+## Functions
+
+It would be cumbersome to write all statistical analyses as bare mathematical equations (although we could...). Fortunately, other people have programmed specific *functions* that we can understand as placeholders for more complex equations or code that runs certain operations. Each function can be exectued by typing its name into the code area. In most cases, we need to provide the function with some *arguments*. The general form is as follows:
+
+`functionname(argument1, argument2, ...)`
+
+Let us look at some basic functions and how they can be used.
+
+```{r}
+sqrt(4) # one argument
+sum(4,4) # two arguments
+sqrt(sum(2,2)) # nested functions
+
+```
+
+These functions are placeholders for simple mathematical operations. Other functions often have named arguments. The following function, for example, allow to generate a sequence of numbers. We only need to provide the function with two arguments: 
+
+from = Lowest number that is created
+to = Highest number that is created
+
+
+```{r}
+seq(from = 3, to =10) # function with several arguments
+seq(3,10) # implicit code
+```
+
+If one doesn't know what a function does or what type of arguments need to be specified, one can use the excellent help library that is included in RStudio (search the function in the help tab, an RStudio tab lower right). We only need to run `?function` (so e.g., `?seq`) to assess the right page. 
+
+**Exercise:** Try to figure out what the function `length()` is for.
+
+
+```{r}
+# Solution
+
+
+
+```
+
+
+## Assignment and variables
+ 
+One of the most useful aspects of R is that can assign values (and as we will see later, almost anything produced in R) to *named variables*. Variables created by assignment will be stored temporarily in the environment. The classical assignment operation is `<-`. Due to popular demand from users of other programming languages, R also allows `=` as assignment operator. However, we suggest to use the more purist `<-` in order to avoid confusion with the arithmetic equal sign. 
+
+```{r}
+x <- 25 # The value 25 is assigned to the variable x
+x # the value of x is shown
+y <- x # the value of x is assigned to y
+sqrt(y) # variables can be used as placeholders
+```
+
+
+**Exercise** Create a sequence (smallest value =1, highest value =10) and name it  *a*. Calculate the length of a and assign the result to another new variable which you name *b*. Print b.
+
+```{r}
+# Solution
+
+
+```
+
+
+## Logical and relational operations
+
+R also deals with logical values such as `TRUE` and `FALSE`, along with logical operations such as negation (`!`), conjunction (`&`), and disjunction (`|`). Negation has precedence, followed by conjunction and then disjunction. Along with regular relational operators (==, >=, >, <, <=, !=), these logical values can be used to test for equality or difference.
+
+```{r}
+!TRUE # should be FALSE
+x == 55 # should be FALSE
+x == y # should be TRUE
+y < 100 # should be TRUE
+x & y == 25
+x <- 40
+x | y == 25
+```
+
+## Colon operator
+
+The so-called colon operation allows to specify sequences. This can be handy when we need to created a series of consecutive numbers. The colon operation is also useful in more complex data structures which we will get to know a bit later.
+
+```{r}
+2:10
+```
+
+
+# Types of data structures
+
+## Values
+
+The most basic units are numbers (*numeric*) or strings (*character*). Both can be assigned to variables. We can use the function `class()` to check what type of value we are currently dealing with.
+
+```{r}
+number <- 5
+class(number)
+text <- "Hello!"
+class(text)
+number * 15
+```
+
+## Vectors
+
+In our research, we barely deal with single values. More often, we have handle with several numbers. The most basic data structure that includes more than one value is called a vector. We can create one by using the function `c()` (combine). 
+
+```{r}
+v <- c(50,52,45,30,12,52,47,68,72,120,50,20) # creating a vector
+v
+```
+
+**Exercise:** Try to compute the mean of the vector.
+
+```{r}
+#Solution
+
+
+```
+
+## Matrices
+
+A more complex data structure with two dimensions is called a matrix. We can create one by using the function `matrix()`. This function has an argument that only allows the values *TRUE* or *FALSE*. Such arguments are common to many functions. Instead of *TRUE* or *FALSE*, we can also write only *T* or *F*. 
+
+```{r}
+m = matrix(c(1,2,3,4,5,6,7,8), nrow = 2, byrow = T) # Separates the vector to produce to rows in a matrix
+m
+m*2 # multiplying all values of the matrix with 2
+```
+
+
+## Data frames
+
+A matrix is already quite similar to a data frame, but it does not have column names. A data frame is a very important data structure as it is the basis for most statistical analyses. In Excel or SPSS, for example, we are always working with a data frame. It is important to understand that a data frame is nothing but a list of named vectors. We can hence create a simple data frame, by assigning several vectors to named variables and use these as arguments in the function `data.frame()`.
+
+```{r}
+df <- data.frame(name = c("Tian", "Mai", "Aleyna", "Lola"), age = c(48,35,38, 20), message = c("text1", "text2", "text3", "text4"), tv_use = c(57,10,52,90), internet_use = c(67,98,72,20))
+
+df
+
+dim(df) # Dimensions of the data frame, here 4 rows 5 columns
+names(df) # variable names
+summary(df) # Provides a useful summary of each variable
+```
+
+
+## Lists
+
+A final data structure that we need to get to know is a list. A list can combine any objects that we might have produced. The named component of a list can be referred to by appending the list name with a `$` and the component name.
+
+```{r}
+l <- list(vector = v, matrix = m, dataframe = df)
+l
+
+l$vector # Referencing only one component
+```
+
+
+# Loading and saving data
+
+## Working directory
+
+We recommend to put all relevant files (e.g., raw data, item formulations...) into one folder on your computer. This folder will be your *working directory*. If you plan on loading data into R, you need to tell R where the working directory is. If we don't know which folder is currently marked as working directory, we can use the function `getwd()` which gives us the current path of the working directory. The function `setwd()`, in contrast, allows us to specify the path. Alternatively, we can set the working directory manually (Session -> Set Working Directory -> To Source File Location). If we save something and do not provide a specific path, R will save it into our working directory.
+
+```{r}
+getwd()
+```
+
+## Saving and loading Rdata-files
+
+The easiest way to store data (or any other R object for that matter) and load it back into R is by creating a `.rdata`-file. We can use the basic `save()` and `load()` functions to accomplish this.
+
+```{r}
+save(df, file = "Dataframe") # Saving a dataframe
+save(l, file = "List") # Saving other objects; here a list
+
+load("Dataframe")
+load("List")
+```
+
+
+
+
+## Saving and loading a data frame as comma-separated-value file
+
+A comma-separated-value file (`.csv`) can be considered the most universal data format that is readable and writeable with almost any program. In practice, you will often share data with other researchers. It is hence useful to save data in a format that almost anyone can work with. Unfortunately, there is no global standard for CSV-files. We can use the function `write.csv()` to produce the American Standard (comma as separator, point as decimal place) or the function `write.csv2()` to produce the European Standard (semicolon as separator, comma as decimal place). Depending on the format that is used in Excel, for example, such files can be opened as spreadsheets.
+
+```{r}
+write.csv2(df, "exampledata.csv", row.names = F) # European standard
+```
+
+The CSV-files is now saved into our working directory. From there, we can load it again using the function `read.csv2()`
+
+**Exercise**: Load the newly created CSV-File and assign it to a new object. Display the object and summarize its content.
+
+```{r}
+#Solution
+
+
+```
+
+
+
+# Another important aspect of using R
+
+## Installing and loading packages
+
+So far, we have only used in-built functions. In many cases, however, we need to add to the basic R library and install additional packages which contain useful functions. To install packages, we can use the function `install.packages()`. As argument, we need to put the wanted packages name in quotes. It is further useful to add the argument `dependencies = T` so that R installs all further requirements that are need to run this package.
+
+After the installation is completed, we have to load the package with the function `library()`. In this case, we are installing and loading the library `knitr` which allows us to produce a html-document out of this RMarkdown-Script.
+. 
+```{r}
+#install.packages("openxlsx") # Has to be performed only once on each computer
+library(openxlsx) # Has to be done in every session in which you want to use this package
+```
+
+
+## Saving and loading a data frame as excel file
+
+```{r}
+library(openxlsx)
+write.xlsx(df, "exampledata.xlsx")
+read.xlsx("exampledata.xlsx")
+
+```
+
+
+
+# Working with data frames
+
+We can get elements of any object in R by referencing their position in the respective object. In general, there are three ways to reference elements:
+
+1. by numerical position
+2. by logical inclusion or exclusion
+3. by name
+
+All three ways refer to positions by using square brackets after the object name: `object[row, column]`. What differs between the methods is what goes between the square brackets.
+
+## Referencing by numerical position
+
+Let us first consider referencing elements in our data frame (df) by numerical position:
+
+```{r}
+df[1,] # first row (= first case)
+df[,1] # first column (= first variable)
+df[2,2] # second row, second column (= second case, second variable)
+```
+
+**Exercise**: Reference the the age of Lola. Can you change the age to 26
+
+```{r}
+#Solution
+
+```
+
+## Referencing by inclusion or exclusion
+
+Referencing by inclusion or exclusion is pretty easy as well:
+
+```{r}
+
+names(df)
+df[,2:4] # include all columns between position 2 an 4 (= three variables)
+df[,c(1,4)] # only columns 1 and 3 (= first and third variable)
+df[,c(-4,-5)] # Exclude variables 4 and 5 (= tv_use and internet_use)
+```
+
+## Referencing by name
+
+Referencing by name is a little bit more cumbersome, yet is often advised when data frames are rather large and one can easily confuse the position of variables.
+
+```{r}
+df[,c("age" , "message")]
+```
+
+If we want to access a particular variable within a data frame, we can also use a simple syntax: `dataframe$variable`
+
+```{r}
+df$age
+mean(df$age, na.rm = T) # computing mean age; the second argument tells R how to handle potentially missing values, na.rm means remove not available data
+```
+
+
+
+## A new data.frame
+
+```{r}
+
+df2 <- data.frame(username = c("D365", "D176", "D567", "D002"), age = c(48,35,38,20), message = c("text1", "text2", "text3", "text4"), followers = c(570,1099,52,90987), internet_use = c(67,98,72,20))
+
+```
+
+
+
+
+
+
+
