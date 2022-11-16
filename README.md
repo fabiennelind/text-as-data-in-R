@@ -15,3 +15,6 @@ The course covers topics related to data collection, data processing, quality co
 
 
 
+https://docs.google.com/spreadsheets/d/1z4T0HZYmcTi0Wp9Q5hht8JQRffuQhCPcP0eYdQ1ikmA/edit?usp=sharing
+
+https://docs.google.com/spreadsheets/d/1Eb5dX2ZZzbhWEsK2A2moUUcgDnEI3mZ473SuA-C7AlM/edit?usp=sharing
