@@ -1,0 +1,478 @@
+---
+title: "Unsupervised Methods"
+author: "Fabienne Lind & Petro Tolochko"
+date: ""
+output:
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Preparation
+
+### Required Packages
+
+We first need to install the packages required for further analysis.
+
+```{r, echo=FALSE}
+r = getOption("repos")
+r["CRAN"] = "http://cran.us.r-project.org"
+options(repos = r)
+```
+
+```{r, message=FALSE, results='hide'}
+
+# install.packages("tm")                            
+# install.packages("tidyverse")                     
+# install.packages("ggthemes")                      
+# install.packages("ggrepel")
+# install.packages("cowplot")
+# install.packages("quanteda")
+# install.packages("quanteda.textmodels")
+
+
+
+# install.packages(quanteda.textplots)
+# install.packages("gtools")
+# install.packages("sotu")
+# install.packages("stm")
+# install.packages(c("Rtsne", "rsvd", "geometry", "purrr"))
+
+
+```
+
+Note: you only need to install the packages once.
+
+We then need load the packages in our environment:
+
+```{r, message=FALSE, results='hide'}
+library(tm)
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
+library(quanteda)
+library(quanteda.textmodels)
+library(gtools)
+library(sotu)
+library(stm)
+library(purrr)
+library(quanteda.textplots)
+
+```
+
+# K-Means Clustering
+## Let's first generate some data!
+
+We will use multinomial models to generate data. Generate texts about bannas and chocolate.
+
+```{r}
+set.seed(123)
+
+# Priors
+theta_1 <- rdirichlet(1, c(1, 6))
+theta_2 <- rdirichlet(1, c(6, 1))
+
+vocabulary <- c("banana", "chocolate")
+
+w <- 200 # numbers of words to generate
+n <- 100
+
+generate_text <- function(n, theta) {
+  sample(vocabulary, rbinom(1, n, .5), replace = TRUE, prob = theta) %>%
+  paste(collapse = " ")
+}
+
+
+
+text_type_1 <- replicate(n, generate_text(w, rdirichlet(1, c(2, 8))))
+text_type_2 <- replicate(n, generate_text(w, rdirichlet(1, c(8, 2))))
+
+
+
+
+all_texts <- c(text_type_1, text_type_2)
+dtm <- DocumentTermMatrix(all_texts) %>% as.matrix()
+
+dtm %>% as_tibble() %>%
+  mutate(class = c(rep(1, n), rep(2, n))) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(class)))
+
+
+# 
+# 
+# 
+# # Modesl
+# texts_1 <- rmultinom(n, 2, theta_1) %>%
+#   t() %>%
+#   as_tibble() %>%
+#   mutate(banan = V1,
+#          chocolate = V2,
+#          type = 1) %>%
+#   select(-V1, -V2)
+# 
+# texts_2 <- rmultinom(n, 2, theta_2) %>% 
+#   t() %>%
+#   as_tibble() %>%
+#     mutate(banan = V1,
+#          chocolate = V2,
+#          type = 2) %>%
+#   select(-V1, -V2)
+
+
+```
+
+
+# Now let's try clustering them!
+It's very easy. We're using `kmeans` function from base `r`.
+
+```{r}
+clustering.kmeans <- kmeans(dtm, 2)
+clustering.kmeans
+
+
+
+
+```
+
+Let's look at the cluster assignment:
+
+```{r}
+cluster <- clustering.kmeans$cluster
+centroids <- clustering.kmeans$centers
+```
+
+And assign to our data:
+
+```{r}
+dtm %>% as_tibble() %>%
+  mutate(cluster = cluster) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(cluster))) +
+  geom_point(aes(banana, chocolate), data = as_tibble(centroids),
+             size = 6, shape = 10)
+```
+
+
+
+
+
+Ok, let's add some more data!
+
+```{r}
+text_type_1 <- replicate(n, generate_text(w, rdirichlet(1, c(2, 8))))
+text_type_2 <- replicate(n, generate_text(w, rdirichlet(1, c(8, 2))))
+text_type_3 <- replicate(n, generate_text(w + 200, rdirichlet(1, c(8, 8))))
+
+
+
+
+all_texts <- c(text_type_1, text_type_2, text_type_3)
+dtm <- DocumentTermMatrix(all_texts) %>% as.matrix()
+
+dtm %>% as_tibble() %>%
+  mutate(class = c(rep(1, n), rep(2, n), rep(2, n))) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(class)))
+
+
+```
+
+A bit more interesting!
+
+```{r}
+clustering.kmeans <- kmeans(dtm, 3)
+clustering.kmeans
+
+cluster <- clustering.kmeans$cluster
+centroids <- clustering.kmeans$centers
+
+
+```
+
+```{r}
+dtm %>% as_tibble() %>%
+  mutate(cluster = cluster) %>%
+  ggplot() +
+  geom_point(aes(banana, chocolate, color = factor(cluster))) +
+  geom_point(aes(banana, chocolate), data = as_tibble(centroids),
+             size = 6, shape = 10)
+```
+
+# Task: try different number of clusters and complare the clustering solution
+
+```{r}
+
+set.seed(123)
+
+# function to compute total within-cluster sum of square 
+wss <- function(k) {
+  kmeans(dtm, k, nstart = 10 )$tot.withinss
+}
+
+# Compute and plot wss for k = 1 to k = 15
+k.values <- 1:3
+
+# extract wss for 2-15 clusters
+wss_values <- map_dbl(k.values, wss)
+
+plot(k.values, wss_values,
+       type="b", pch = 19, frame = FALSE, 
+       xlab="Number of clusters K",
+       ylab="Total within-clusters sum of squares")
+
+
+
+
+```
+
+
+
+# Topic Modeling
+
+We will be using the `stm` package and `sotu` data.
+
+First, let's load up the data:
+
+```{r}
+sotu <- sotu_text %>% as_tibble()
+sotu_metadata <- sotu_meta %>% as_tibble()
+
+
+
+
+sotu <- bind_cols(sotu, sotu_metadata)
+
+summary(sotu)
+
+```
+
+
+Let's inspect a text:
+
+```{r}
+sotu$value[1]
+
+
+```
+
+Also, the timeframe in the dataset is quite large (1790 to 2020). We might want to trim it, since the language might have changed significantly in this time.
+
+```{r}
+sotu <- sotu %>% 
+  filter(year >= 1900)
+```
+
+
+Ok, we need to do basic preprocessing. We can do that immediately within the infrastructure of the `stm` package, with the `textProcessor` function.
+
+This will take a few seconds...
+
+```{r}
+sotu_data <- textProcessor(
+  sotu$value,
+  metadata = sotu
+)
+```
+
+
+Ok, now we have the processed object.
+
+```{r}
+sotu_data
+```
+Next, we need to prepare the documents for topic modeling. This is done with the `prepDocuments` function
+```{r}
+sotu_data_prepd <- prepDocuments(sotu_data$documents,
+                                 sotu_data$vocab,
+                                 sotu_data$meta)
+```
+
+
+Now we're ready for some modelling!
+This will also take some time.
+
+```{r, esults='hide'}
+sotu_topic_10 <- stm(documents = sotu_data_prepd$documents,
+                     sotu_data_prepd$vocab,
+                     K = 10,
+                     max.em.its = 75,
+                     data = sotu_data_prepd$meta,
+                     init.type = "Spectral")
+```
+
+When the model is done running, we can inspect the output. Different possible ways to do so:
+
+```{r}
+labelTopics(sotu_topic_10)
+
+```
+
+Notice the word `will`, `nation`, `year`, `american`, `america`, `nation` etc. appear in every topic. This is not a great topic model.
+
+First, we might want to remove these terms.
+
+
+```{r}
+sotu_data <- textProcessor(
+  sotu$value,
+  metadata = sotu,
+  customstopwords = c("will",
+                      "national",
+                      "nation",
+                      "year",
+                      "america",
+                      "american",
+                      "government",
+                      "govern",
+                      "can",
+                      "must")
+)
+
+sotu_data_prepd <- prepDocuments(sotu_data$documents,
+                                 sotu_data$vocab,
+                                 sotu_data$meta)
+
+sotu_topic_10 <- stm(documents = sotu_data_prepd$documents,
+                     sotu_data_prepd$vocab,
+                     K = 15,
+                     max.em.its = 75,
+                     data = sotu_data_prepd$meta,
+                     init.type = "Spectral")
+```
+
+
+A little bit better, but still not amazing. Maybe the problem is in the K? How many topics to select? ***NOBODY KNOWS***.
+
+But there are several ways to get a better idea:
+
+### T-SNE initialization
+
+```{r}
+sotu_topic_0 <- stm(documents = sotu_data_prepd$documents,
+                     sotu_data_prepd$vocab,
+                     K = 0,
+                     max.em.its = 75,
+                     data = sotu_data_prepd$meta,
+                     init.type = "Spectral")
+```
+
+WOAH, this method recommends 103 topics!!! But this is a greed method: essentially, the best 'fit' for a topic model is when every document is assigned a separate topic. But kind of defeats the purpose.
+
+# Many Models
+
+Second method is estimating several topic models and then comparing "quality statistics", and figuring out which one is better. Let's estimate K = 20, K = 40 and K = 60.
+
+This takes a very long time! (I already ran it)
+
+```{r, print=FALSE}
+# many_models <- manyTopics(documents = sotu_data_prepd$documents,
+#                      sotu_data_prepd$vocab,
+#                      K = c(20, 40, 60),
+#                      max.em.its = 75,
+#                      data = sotu_data_prepd$meta,
+#                      init.type = "Spectral")
+
+load("many_models.RData")
+```
+
+
+```{r}
+sapply(many_models$exclusivity, mean)
+sapply(many_models$semcoh, mean)
+
+```
+Ok, let's choose the K=60 model.
+
+```{r, print=FALSE}
+sotu_topic_60 <- stm(documents = sotu_data_prepd$documents,
+                    vocab = sotu_data_prepd$vocab,
+                    K = 60,
+                     prevalence =~ party + s(year),
+                     max.em.its = 75,
+                     data = sotu_data_prepd$meta,
+                     init.type = "Spectral",
+                     verbose=FALSE
+)
+```
+
+Let's see:
+
+```{r}
+labelTopics(sotu_topic_60)
+plot(sotu_topic_60)
+```
+
+
+```{r}
+cloud(sotu_topic_60, topic=13, scale=c(2,.25))
+
+```
+
+
+```{r}
+
+
+sotu_topic_60_effects <- estimateEffect(1:20 ~ party + s(year), sotu_topic_60, meta = sotu_data_prepd$meta, uncertainty = "Global")
+summary(sotu_topic_60_effects, topics=3)
+
+
+
+plot(sotu_topic_60_effects, covariate = "party", topics = c(3), model = sotu_topic_60, method = "pointestimate",
+     main = "Effect of Party on Topic Proportion", labeltype = "custom",
+     custom.labels = c("Republican", "Democratic")
+     )
+
+
+
+
+```
+
+
+
+# Text scaling
+
+```{r}
+# Irish budget speeches from 2010
+
+
+toks_irish <- tokens(data_corpus_irishbudget2010, remove_punct = TRUE)
+dfmat_irish <- dfm(toks_irish)
+tmod_wf <- textmodel_wordfish(dfmat_irish, dir = c(6, 5))
+summary(tmod_wf)
+
+
+
+textplot_scale1d(tmod_wf)
+
+textplot_scale1d(tmod_wf, groups = dfmat_irish$party)
+
+
+textplot_scale1d(tmod_wf, margin = "features", 
+                 highlighted = c("government", "global", "children", 
+                                 "bank", "economy", "the", "citizenship",
+                                 "productivity", "deficit"))
+
+```
+
+Topic models can also do unidimensional scaling!
+
+```{r}
+irish_stmfit <- stm(documents = dfmat_irish_stm$documents, 
+                     vocab = dfmat_irish_stm$vocab,
+                     K = 2,
+                     max.em.its = 75,
+                     data = dfmat_irish_stm$meta,
+                     init.type = "Spectral"
+)
+
+
+compare.df <- cbind(name=rownames(docvars(dfmat_irish)),wordfish = tmod_wf$theta, stm = irish_stmfit$theta[,2])
+compare.df
+
+
+```
+
