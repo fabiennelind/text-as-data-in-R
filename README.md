@@ -1,6 +1,6 @@
 # text-as-data-in-R
 
-This repository contains the materials for Day 3 of the BremenSummer School for Women in Political Methodology.
+This repository contains the materials for Day 3 of the Bremen Summer School for Women in Political Methodology.
 
 | Session |  Topic
 |----------|----------|
@@ -10,3 +10,7 @@ This repository contains the materials for Day 3 of the BremenSummer School for 
 It includes the slides, example text data sets, and R scripts `xy.Rmd`.
 
 # Manual Benchmark Creation
+
+Coder 1:
+Coder 2:
+All participants:
