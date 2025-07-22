@@ -13,10 +13,3 @@ This course is aimed at people with some knowledge of automated text analysis wh
 
 The course covers topics related to data collection, data processing, quality control, and the critical interpretation of results.
 
-
-
-https://docs.google.com/spreadsheets/d/1z4T0HZYmcTi0Wp9Q5hht8JQRffuQhCPcP0eYdQ1ikmA/edit?usp=sharing
-
-https://docs.google.com/spreadsheets/d/1Eb5dX2ZZzbhWEsK2A2moUUcgDnEI3mZ473SuA-C7AlM/edit?usp=sharing
-
-For everyone: https://docs.google.com/spreadsheets/d/1cx1TGdzpWcTuSU4Lar1-ED22KmUT7NlpNscUK0vbauM/edit?usp=sharing
