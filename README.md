@@ -9,7 +9,7 @@ This repository contains the materials for Day 3 of the Bremen Summer School for
 
 It includes the slides, example text data sets, and R scripts `xy.Rmd`.
 
-# Manual Benchmark Creation
+## Manual Benchmark Creation
 
 Coder 1:
 Coder 2:
