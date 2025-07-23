@@ -1,0 +1,108 @@
+---
+title: "2_lexicoder_sentiment_analysis.R"
+output: html_document
+date: "2025-07-08"
+---
+
+
+# Example Sentiment
+https://quanteda.io/reference/data_dictionary_LSD2015.html
+https://www.snsoroka.com/data-lexicoder/
+
+Young, L. & Soroka, S. (2012). Affective News: The Automated Coding of Sentiment in Political Texts. doi:10.1080/10584609.2012.671234 . Political Communication, 29(2), 205–231
+
+Important! Use the preprocessing script provided by Emily Luxon to improve the performance of the dictionary,
+involving the detection of negations or handling of punctuation (download the script here: https://www.snsoroka.com/data-lexicoder/)
+
+
+We go here with a toy corpus.
+
+```{r}
+
+library(quanteda) # text analysis project
+
+# Create example corpus
+texts_df <- data.frame(
+  document = c("This aggressive policy will not win friends.",
+           "The new initiative is not bad and might work well.")
+)
+
+texts_df$doc_id <- seq(1, nrow(texts_df)) # add id to dataframr
+texts_df$doc_id <- as.character(texts_df$doc_id)
+
+corp <- corpus(texts_df, text = "document", docid_field = "doc_id")
+corp
+
+```
+
+Tokenize
+
+```{r}
+
+toks <- tokens(corp)
+toks
+
+```
+
+
+Compound neg_negative and neg_positive tokens before creating a dfm object
+
+```{r}
+ 
+toks <- tokens_compound(toks, data_dictionary_LSD2015)
+toks
+
+```
+
+Apply dictionary
+
+```{r}
+
+dfm_lookup(dfm(toks), data_dictionary_LSD2015)
+
+#data_dictionary_LSD2015
+```
+
+Covert result to a dataframe and merge with 'texts_df'
+
+```{r}
+library(dplyr)
+sentiment_dfm <- dfm_lookup(dfm(toks), data_dictionary_LSD2015)
+sentiment_df <- convert(sentiment_dfm,to = "data.frame")
+
+texts_sentiment_df <-  left_join(texts_df, sentiment_df, by = "doc_id")
+
+```
+
+
+Formula to calculate one sentiment score (normalized by text length): see 
+score = (positive + neg_negative) - (negative + neg_positive) / total_words
+
+Reference: 
+Kouloumpis, E., Wilson, T. & Moore, J. (2011, July). Twitter sentiment analysis: The
+good the bad and the omg!. In Proceedings of the Fifth International AAAI
+conference on weblogs and social media, Barcelona, Spain (The AAAI press, pp. 538–
+541).
+
+
+```{r}
+
+texts_sentiment_df$word_count <- lengths(toks)
+
+texts_sentiment_df$score <- (
+  texts_sentiment_df$positive +
+  texts_sentiment_df$neg_negative -
+  texts_sentiment_df$negative -
+  texts_sentiment_df$neg_positive
+) / texts_sentiment_df$word_count
+
+```
+
+### Other dictionaries in quanteda
+
+List: 
+https://rdrr.io/github/quanteda/quanteda.sentiment/f/vignettes/sentiment_analysis.Rmd
+
+
+
+

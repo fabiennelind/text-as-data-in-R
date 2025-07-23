@@ -1,0 +1,266 @@
+---
+title: "Supervised machine learning"
+author: "Fabienne Lind"
+date: "June 2025"
+output: html_document
+---
+
+```{r}
+
+# Install these if not already installed:
+# install.packages(c("data.table", "quanteda", "quanteda.textmodels", "caret", 
+#                    "ggplot2"))
+
+library(data.table)
+library(quanteda)
+library(quanteda.textmodels)
+library(caret)
+library(ggplot2)
+```
+
+
+## Load the corpus
+
+We use a labeled Movie Review Dataset to implement a simple supervised machine learning approach. The dataset contains 5,331 positive and 5,331 negative processed sentences from Rotten Tomatoes movie reviews.
+Our goal is to train a classifier that can predict whether a sentence is positive or negative.
+
+This data was first used in Bo Pang and Lillian Lee, ``Seeing stars: Exploiting class relationships for sentiment categorization with respect to rating scales.'', Proceedings of the ACL, 2005. Please find more information on the dataset here.
+https://huggingface.co/datasets/rotten_tomatoes
+
+Data labeling: "the movie-review “snippets” (a striking extract usually one sentence long) downloaded from www.rottentomatoes.com; each
+snippet was labeled with its source review’s label
+(positive or negative) as provided by Rotten Tomatoes." (Pang & Lee, 2005) p.119)
+
+```{r}
+
+reviews <- read.csv("https://raw.githubusercontent.com/fabiennelind/text-as-data-in-R/main/data/rotten_tomatoes.csv")
+
+```
+
+## Inspect the data
+
+
+```{r}
+colnames(reviews)
+names(reviews)[names(reviews) == 'value'] <- 'text' #give the column with the text a useful name
+class(reviews$text)
+
+table(reviews$polarity) #check the distribution of the outcome variable
+class(reviews$polarity)
+
+```
+
+
+We now work with the R package quanteda. 
+
+More tutorials specifically for machine learning.
+https://content-analysis-with-r.com/5-machine_learning.html
+https://tutorials.quanteda.io/basic-operations/corpus/corpus/
+
+
+Create a corpus and look at a summary.
+
+```{r}
+
+reviews_corpus <- corpus(reviews)
+summary(reviews_corpus, 5)
+
+```
+
+
+```{r}
+# create docvar with ID
+reviews_corpus$id_numeric <- 1:ndoc(reviews_corpus)
+summary(reviews_corpus, 5)
+```
+
+
+Create a vector which includes the ids for the training part (here 80%) and for the test data (here 20%).
+We randomly select the 80%. The remaining reviews are assigned as test cases.
+Once we have the DFM, we split it into training and test set. We'll go with 80% training and 20% set. Note the use of a random seed to make sure our results are replicable.
+
+
+```{r}
+set.seed(657)
+id_train <- sample(1:nrow(reviews), floor(.80 * nrow(reviews)))
+id_test <- (1:nrow(reviews))[1:nrow(reviews) %in% id_train == FALSE]
+```
+
+Tokenize texts and represent as dfm
+
+```{r}
+toks_reviews <- tokens(reviews_corpus, remove_punct = TRUE, remove_number = TRUE) %>% 
+               tokens_remove(pattern = stopwords("en")) %>% 
+               tokens_wordstem()
+dfm_reviews <- dfm(toks_reviews)
+dfm_reviews
+```
+
+```{r}
+dfm_reviews_trim <- dfm_trim(dfm_reviews, min_docfreq = 2, verbose=TRUE) 
+dfm_reviews_trim
+```
+
+Split the dfm in two parts, a training and a test part.
+
+```{r}
+# get training set
+dfm_train <- dfm_subset(dfm_reviews_trim, id_numeric %in% id_train)
+
+
+# get test set (by using the ! you indicate that you select documents not in id_train)
+dfm_test <- dfm_subset(dfm_reviews_trim, !id_numeric %in% id_train)
+```
+
+# Training
+
+Fit a Naïve Bayes Classifier on the training dfm and save the learned model in the object 'model.NB'.
+The Naïve Bayes Classifier is part of the library quanteda.textmodels. 
+
+```{r}
+model.NB <- textmodel_nb(dfm_train, dfm_train$polarity, prior = "docfreq")#Prior distributions refer to the prior probabilities assigned to the training classes
+```
+
+
+Fit a Linear SVM classifier on the training dfm and save the learned model in the object 'model.svm'.
+
+```{r}
+model.svm <- textmodel_svmlin(dfm_train, dfm_train$polarity)
+```
+
+
+#Predict for the test set
+
+```{r}
+pred.nb <- predict(model.NB, dfm_test, force = TRUE) # force = True will force your test data to give identical features (and ordering of features) to the training set
+```
+
+```{r}
+summary(pred.nb)
+```
+
+
+```{r}
+pred.svm <- predict(model.svm, dfm_test, force = TRUE) # force = True will force your test data to give identical features (and ordering of features) to the training set
+
+```
+
+
+```{r}
+summary(pred.svm)
+```
+
+
+Add the labels predicted by the model to the initial dataframe. 
+
+
+```{r}
+colnames(reviews)
+
+reviews$id <- 1:nrow(reviews)
+reviews_test <- subset(reviews, id %in% id_test)
+reviews_test$polarity_nb <- pred.nb
+colnames(reviews_test)
+```
+
+
+Let's add another column to the dataframe with the svm prediction?
+
+```{r}
+#Solution
+reviews_test$polarity_svm <- pred.svm
+colnames(reviews_test)
+
+```
+
+# Evaluation
+
+```{r}
+
+# labels need to be factor class
+reviews_test$polarity <- as.factor(reviews_test$polarity)
+
+# Calculate the confusion matrix
+conf_matrix_NB <- confusionMatrix(pred.nb, reviews_test$polarity)
+
+# Print the confusion matrix and other metrics
+print(conf_matrix_NB)
+
+```
+
+
+```{r}
+
+# Extract values from the confusion matrix
+cm <- conf_matrix_NB$table
+
+# Calculate precision and recall manually
+precision <- diag(cm) / colSums(cm)
+recall <- diag(cm) / rowSums(cm)
+
+# Extract F1 scores
+nb_f1 <- conf_matrix_NB$byClass['F1']
+
+
+# Print precision and recall
+print(paste("Precision: ", precision))
+print(paste("Recall: ", recall))
+
+```
+
+Exercise: Repeat this process for the SVM classifier
+
+```{r}
+#Solution: 
+
+# labels need to be factor class
+pred.svm <- as.factor(pred.svm)
+
+# Calculate the confusion matrix
+conf_matrix_svm <- confusionMatrix(pred.svm, reviews_test$polarity)
+
+
+# Print the confusion matrix and other metrics
+print(conf_matrix_svm)
+
+# Extract values from the confusion matrix
+cm <- conf_matrix_svm$table
+
+# Calculate precision and recall manually
+precision <- diag(cm) / colSums(cm)
+recall <- diag(cm) / rowSums(cm)
+
+# Extract F1 scores
+svm_f1 <- conf_matrix_svm$byClass['F1']
+
+
+# Print precision and recall
+print(paste("Precision: ", precision))
+print(paste("Recall: ", recall))
+print(paste("F1: ", svm_f1))
+
+```
+
+
+
+Plot both results
+
+```{r}
+
+# Create a data frame for plotting
+f1_scores <- data.frame(
+  Classifier = c("Naive Bayes", "SVM"),
+  F1_Score = c(nb_f1, svm_f1)
+)
+
+# Plot the F1 scores
+ggplot(f1_scores, aes(x = Classifier, y = F1_Score)) +
+  geom_bar(stat = "identity", fill = "green") +
+  theme_minimal() +
+  labs(title = "F1 Scores of Different Classifiers",
+       x = "Classifier",
+       y = "F1 Score")
+```
+
+
+

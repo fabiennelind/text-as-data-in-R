@@ -1,0 +1,446 @@
+---
+title: "Dictionaries"
+author: "Fabienne Lind "
+date: "June, 2025"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Automated Article Classification and Validation
+
+### Data
+
+For this tasks, we will work with headlines from news articles about migration. The data set is a subset of the [REMINDER media corpus](https://doi.org/10.11587/IEGQ1B).
+
+Let's load the data first and take a look. Each row represents one news article.
+
+For our exercise, we work with the English headlines (published in UK newspapers). 
+
+Now, we load the data from github.
+
+```{r}
+articles_en <- read.csv("https://raw.githubusercontent.com/fabiennelind/text-as-data-in-R/refs/heads/main/data/news_migration.csv")
+```
+
+
+## Automated Classification with a Dictionary
+
+For this tutorial, we like to identify all articles that mention political actors in their headlines. The salience of 'Political actors' is the concept that we like to measure with an automated text analysis method, a dictionary. As a first step, we define the concept more closely.
+
+### Concept Definition
+
+**Political actors** are here defined as political parties represented in the House of Commons between 2000 and 2017, which is the period in which the articles in our sample where published. Next to these parties, we define UK politicians with a leading role as political actors. To keep the task manageable for this exercise, we focus only on actors highly relevant between 2000 and 2017. 
+
+We intend to measure the salience of political actors as simple binary variable:
+1 = At least one political actor is mentioned
+0 = No political actor is mentioned.
+
+### Dictionary creation
+
+A dictionary is a set of keywords or phrases that represent the concept of interest. 
+
+We now start to collect relevant keywords for the dictionary. We start with a list of keywords that we consider most relevant. An example for a relevant keyword is "Boris Johnson".
+For clarity, we here work with two keyword sets: we collect the keywords related to politicians in one vector (here named `politicians`), and keywords related to political parties in another vector (here named `parties`). 
+
+The keywords are written as regular expressions. A ‘regular expression’ is a pattern that describes a string. To learn more about regular expressions, we recommend this R tutorial [(Wickham & Grolemund, 2017)](https://r4ds.had.co.nz/strings.html). To test regular expressions quickly, visit https://spannbaueradam.shinyapps.io/r_regex_tester/
+
+```{r}
+
+politicians <- c("tony blair", "gordon brown", "david cameron", "theresa may", "boris johnson", "prime minister")
+parties <- c("conservative party", "\\stor(y|ies)","ukip","labour party", "liberal democrats", "scottish national party", "green party")
+
+```
+
+Some questions:
+
+Pros and cons of storing all keywords in one vector?
+
+What other keywords are relevant to measure the concept?
+
+
+Before we search the keyword in the headlines, we apply some pre-processing steps to the headlines. For this exercise, we designed the keywords all in lower case, so the headlines have to be lower case too.
+
+```{r}
+library(dplyr)
+library(stringr)
+
+articles_en <- articles_en %>%
+  mutate(headline = str_to_lower(headline)) 
+head(articles_en$headline)
+
+```
+
+We now search the keywords in the article headlines. The function `stri_count_regex` from the R package **stringi** can count how often a pattern appears in a text. We call this here the number of hits. The function can search for regular expression. We here ask to count a pattern in the column `headline` of the dataframe `articles_en`. 
+
+The patterns to count are the politician keywords and the party keywords. 
+
+
+We now first define a function to count keywords in a text
+
+```{r}
+library(stringi)
+count_keywords <- function(text, keywords) {
+  keyword_counts <- sapply(keywords, function(keyword) {
+    pattern <- paste0("(?i)", keyword, "\\b")  # Adding case-insensitive flag (pattern will match both uppercase and lowercase versions of the keyword) 
+        keyword_count <- stri_count_regex(text, pattern)
+    return(keyword_count)
+  })
+  return(keyword_counts)
+}
+
+```
+
+
+
+Count keywords for each group for each row and create new columns
+
+```{r}
+articles_en$politicians_count <- apply(articles_en, 1, function(row) sum(count_keywords(row["headline"], politicians)))
+articles_en$parties_count <- apply(articles_en, 1, function(row) sum(count_keywords(row["headline"], parties)))
+
+
+table(articles_en$politicians_count)
+table(articles_en$parties_count)
+
+```
+
+Function to check which keywords were found and concatenate them
+
+```{r}
+
+check_keywords <- function(text, keywords) {
+  found_keywords <- keywords[stri_detect_regex(text, paste0("(?i)\\b", keywords, "\\b"))]
+  return(paste(found_keywords, collapse = ", "))
+}
+
+```
+
+Check which keywords were found for each group for each row and create a single column
+
+```{r}
+
+articles_en$politicians_keywords_found <- apply(articles_en, 1, function(row) check_keywords(row["headline"], politicians))
+articles_en$parties_keywords_found <- apply(articles_en, 1, function(row) check_keywords(row["headline"], parties))
+
+table(articles_en$politicians_keywords_found)
+table(articles_en$parties_keywords_found)
+
+```
+
+
+So far, we obtained a count, that represents how often the keywords were detected per text. Since we initially proposed a simple binary measurement, we now do some recoding. 
+
+We add a new column to the dataframe called `actors_d`. This column includes a 1 if at least one of all defined keywords creates a hit, and a 0 if no keyword was found. 
+
+```{r}
+
+articles_en <- articles_en %>%
+  mutate(
+    actors_d = case_when(
+      parties_count >= 1 | politicians_count >= 1 ~ 1,
+      TRUE ~ 0
+    ),
+    actors_d = if_else(is.na(actors_d), 0, actors_d)
+  )
+
+```
+
+According to our automated measurement, how many articles mention political actors in their headlines?
+
+```{r}
+
+table(articles_en$actors_d) # descriptive overview
+
+```
+
+We have now managed to get an automated measurement for the variable. **But how valid is this measurement?** Does our small set of keywords represent the concept adequately?
+
+A common procedure in automated content analysis is to test construct validity. We ask:
+How close is this automated measurement to a more trusted measurement: Human understanding of text.
+Let's put this to practice. 
+
+## Dictionary validation with a human coded baseline
+
+To validate the dictionary, we compare the classifications of the dictionary with the classifications of human coders. 
+
+We create the human coded baseline together. 
+
+### Intercoder reliability test
+
+To ensure the quality of our manual coding, we first perform an intercoder reliability test. For this tutorial, we select a random set of 10 articles. In a real study the number of observations coded by several coders should be higher.  
+
+```{r}
+
+set.seed(57)# setting a seed ensures that the random selection can be repeated in the same way
+library(dplyr)
+
+intercoder_set <- articles_en %>%
+  sample_n(10)
+
+```
+
+We now add an empty column called `actors_m`, so that coders can enter the manual codes. We drop all columns that are not necessary.
+
+```{r}
+
+intercoder_set <- intercoder_set %>%
+  mutate(actors_m = "") %>%
+  select(id, actors_m, headline)
+
+```
+
+We then create several duplicates of the intercoder reliability set, one for each coder. We create separate files so that coders code individually and do not peek by mistake.
+To each of these sets we add the coder name in a new column called `coder_name`.
+For this example, we now need 2 volunteers. Who would like to code?
+
+```{r}
+
+intercoder_set_coder1 <- intercoder_set
+intercoder_set_coder1$coder_name <- "Coder1"
+
+intercoder_set_coder2 <- intercoder_set
+intercoder_set_coder2$coder_name <- "Coder2"
+
+```
+
+We then want to save the data sets in google sheets. Detailed instructions about the conncection of **R** and **Google Sheets** can be found in  [this](https://googlesheets4.tidyverse.org/articles/drive-and-sheets.html) and [this ](https://googlesheets4.tidyverse.org/articles/drive-and-sheets.html) tutorial.
+
+The two packages needed here are **googledrive** and **googlesheets4**.
+
+```{r}
+
+#install.packages("googledrive")
+#install.packages("googlesheets4")
+library(googledrive)
+library(googlesheets4)
+
+```
+
+```{r}
+
+# Authentication
+drive_auth(email ="fabienne.lind@gmail.com")
+gs4_auth(token = drive_token())
+drive_user()
+
+```
+
+We now save the datasets for the intercoder reliability test as Google Sheets with the function `gs4_create`. 
+
+```{r}
+
+sheet_id1<- gs4_create("intercoder_set_coder1",sheets = intercoder_set_coder1)
+sheet_id2<- gs4_create("intercoder_set_coder2",sheets = intercoder_set_coder2)
+
+```
+
+Ready to code? We will post links for the different files. Read the column `headline`. If the headline mentions a political actor insert `1` in the column `actors_m`. Enter a `0` in `actors_m` if the headline does not mention a political actor.
+
+After you finished coding, we read all sheets back into Rstudio (now with manual classifications for `actors_m`).
+
+```{r}
+
+intercoder_set_coder1c <- read_sheet(sheet_id1)
+intercoder_set_coder2c <- read_sheet(sheet_id2)
+
+```
+
+All dataframes are combined into one dataframe with the function `rbind`.
+
+```{r}
+
+reliability_set <- rbind(intercoder_set_coder1c, intercoder_set_coder2c) 
+
+```
+
+Too calculate the agreement between coders, we first restructure the `reliability_set` a bit (the different coders become variables). 'id' is the name of our id variable. 'coder_name' is the column with the different coder ids. And 'actors_m' is the variable for which we seek to test intercoder reliability.
+
+```{r}
+
+#install.packages("reshape2", "irr)
+library(reshape2) 
+library(irr)
+
+df_wide <- dcast(reliability_set, id ~ coder_name, value.var="actors_m")
+# Remove the ID column and convert to matrix
+ratings_matrix <- as.matrix(df_wide[,-1])
+
+# Transpose the matrix (docs as columns, coders as rows)
+ratings_matrix_t <- t(ratings_matrix)
+
+
+```
+
+The package **irr** allows to calculate various coefficients of intercoder reliability. 
+We calculate Krippendorff's alpha and Cohen's kappa for this example.
+
+```{r}
+
+#install.packages("irr")
+library(irr)  
+
+# Compute Krippendorff's alpha (nominal = categorical labels)
+kripp.alpha(ratings_matrix_t, method = "nominal")
+
+# Compute Cohen's kappa: Assumes only two coders
+kappa2(ratings_matrix, weight = "unweighted")  # for nominal
+
+
+```
+
+If alpha is large enough, we consider the quality of our manual coding as sufficient. We can then start with the creation of a larger manual baseline to be compared with the dictionary classifications.
+
+## Creating a manually coded baseline
+
+We pick 135 headlines randomly. 
+
+```{r}
+
+set.seed(789)# setting a seed ensures that the random selection can be repeated in the same way
+
+manual_set <- articles_en %>%
+  sample_n(135)
+
+```
+
+We add again an empty column called `actors_m`, for coders to enter the manual codes. This time, we also add an empty column for the coder names. We split the work. Each of us gets 5 headlines to code (in a real application: each of the coders would need to take part in the intercoder test) 
+
+```{r}
+
+manual_set <- manual_set %>%
+  mutate(actors_m = "") %>%
+  select(id, actors_m, headline)
+
+names_vector <- rep(c("JTA", "LJ","MT", "FB", "ES", 
+                      "FW", "CB", "MT", "DIK", "JH", 
+                      "CB", "EWL", "SK", "ELS", "CJ",
+                      "EF", "HR", "KG", "PK", "GA", 
+                      "HS", "AK", "LW", "LS", "PL", "PAP", "FL"), each = 5)
+manual_set$coder_name <- names_vector
+
+```
+
+We create a google sheet for the task with `gs4_create`. 
+
+```{r}
+
+sheet_id_manual<- gs4_create("manual_set", sheets = manual_set)
+
+```
+
+Please open the sheet in your browser. Find you name in the column `coder_name` . Then start to enter 1 (political actor in headline mentioned) or 0 (not mentioned) in the column `actors_m` for the rows with your coding name. Our goal is to finish coding of all headlines.
+
+
+After you finish coding, I read all sheets back into Rstudio (now with manual classifications for `actors_m`).
+
+```{r}
+
+manual_set_coded <- read_sheet(sheet_id_manual)
+
+```
+
+We need to create a data set, where the manual and automated classifications are included.
+
+```{r}
+# we need only 2 columns from the manual set
+manual_set_coded <- manual_set_coded %>%
+  select(id, actors_m)
+
+articles_coded_d_m <- merge(manual_set_coded, articles_en, by ="id")
+                           
+```
+
+## Compare automated with manual classifications 
+
+We compare the automated classification (in column `actors_d`) with the manual classifications (in column `actors_m`) we use three metrics: Recall, Precision, and F1.
+The metrics inform us about the quality of the dictionary. All three metrics range from 0 to 1. 
+We assume that our manual classification identified all relevant articles (here: headlines that mention a political actor).
+
+
+To calculate the three metrics, we need first to create three new columns via some recoding. 
+
+The column `Relevant_andRetrieved` includes a 1 if the manual coder and the dictionary coded 1. = True positive
+The column `Relevant_notRetrieved` includes a 1 if the manual coder coded 1 but the dictionary coded 0. = False negative
+The column `notRelevant_butRetrieved` includes a 1 if the manual coder coded 0 but the dictionary coded 1. = False positive
+
+
+```{r}
+
+articles_coded_d_m$Relevant_andRetrieved[articles_coded_d_m$actors_m == 1 & articles_coded_d_m$actors_d== 1 ] <- 1
+articles_coded_d_m$Relevant_notRetrieved[articles_coded_d_m$actors_m == 1 & articles_coded_d_m$actors_d == 0 ] <- 1
+articles_coded_d_m$notRelevant_butRetrieved[articles_coded_d_m$actors_m == 0 & articles_coded_d_m$actors_d == 1 ] <- 1
+
+```
+
+### Recall 
+
+By inspecting recall we can say how many relevant articles are retrieved by the dictionary.
+A recall of 1.0 means that our dictionary retrieved all relevant articles. 
+A recall of 0.8 means that our dictionary retrieved 80% of all relevant articles. 
+
+To obtain recall, we calculate:
+
+```{r}
+
+recall <- (sum(articles_coded_d_m$Relevant_andRetrieved, na.rm=TRUE))/(sum(articles_coded_d_m$Relevant_notRetrieved, na.rm=TRUE) + (sum(articles_coded_d_m$Relevant_andRetrieved, na.rm=TRUE)))
+recall
+
+
+```
+
+
+### Precision 
+
+By inspecting precision we can say how many retrieved articles are relevant.
+A precision of 1,0 means that all articles retrieved by the dictionary are relevant. 
+A precision of 0.8 means that 80% of the articles that our dictionary retrieved are relevant articles. 
+
+To obtain precision, we calculate:
+
+```{r}
+
+precision <- (sum(articles_coded_d_m$Relevant_andRetrieved, na.rm=TRUE))/(sum(articles_coded_d_m$notRelevant_butRetrieved, na.rm=TRUE) + (sum(articles_coded_d_m$Relevant_andRetrieved, na.rm=TRUE)))
+precision # 
+
+```
+
+
+### F1
+
+F1 is the harmonic mean between recall and precision. 
+
+To obtain F1, we calculate:
+
+```{r}
+
+F1 <- (2 * precision * recall)/(precision + recall)
+F1
+
+```
+
+Questions: 
+
+- Considering our results for precision and recall, what does this mean for the quality of our dictionary?
+
+- What can we do to improve recall?
+
+- What can we do to improve precision?
+
+
+
+### Improving precision: Fine-tuning of the keywords.
+
+```{r}
+
+politicians <- c()
+parties <- c()
+
+```
+
+### Improving recall: Extending the keywords
+
+```{r}
+
+
+```
