@@ -1,0 +1,609 @@
+---
+title: "Static Word Embeddings with R: Word2Vec,GloVe"
+output: html_document
+date: "2025-06-28"
+---
+
+```{r setup, include=FALSE}
+
+# Install these if not already installed:
+# install.packages(c("word2vec", "data.table", "quanteda", "stringr", "ggplot2", 
+#                    "ggrepel", "umap", "e1071", "tidyverse", "tidytext", 
+#                    "Rtsne", "text2vec", "widyr"))
+
+# Load libraries
+library(data.table)  # High-performance data manipulation
+library(tidyverse)   # Data wrangling and visualization (ggplot2, dplyr, etc.)
+library(widyr)       # Data wrangling
+library(tidytext)    # Text mining using tidy data principles
+
+library(word2vec)    # Train and use Word2Vec embeddings
+library(text2vec)    # Text vectorization, GloVe embeddings, modeling
+
+library(quanteda)    # Text analysis, DTM/TF-IDF, corpus processing
+library(stringr)     # String manipulation (part of tidyverse)
+library(ggplot2)     # Grammar of graphics for plotting
+library(ggrepel)     # Improved label placement in ggplot2
+library(umap)        # UMAP dimensionality reduction 
+library(Rtsne)       # t-SNE dimensionality reduction for visualization
+library(e1071)       # SVM, Naive Bayes, and other ML algorithms
+
+```
+
+
+# Introduction
+
+In this notebook, we explore word embeddings: numeric vector representations of words that capture their meaning.
+
+Unlike basic count-based methods like bag-of-words, embeddings model semantic similarity: words used in similar contexts are placed close together in vector space.
+
+These representations are learned by analyzing word co-occurrence patterns. The idea is simple: words with similar meanings tend to appear in similar environments.
+
+We'll start with word2vec and more then to a simple co-occurrence-based embedding using PMI (Pointwise Mutual Information), and then move to GloVe embeddings.
+
+
+# Load data
+
+```{r}
+
+data <- read.csv("https://raw.githubusercontent.com/fabiennelind/text-as-data-in-R/refs/heads/main/data/data_climate.csv")
+
+```
+
+
+
+# Word2Vec 
+
+ 
+Train and Inspect Word2Vec CBOW Model
+
+```{r}
+
+cbow_model = word2vec(x = data$text, type = "cbow", dim = 15, iter = 20, min_count = 4)
+
+```
+
+Find similar words to a target word
+
+```{r}
+
+
+cbow_similar <- predict(cbow_model, c("climate", "women"), type = "nearest", top_n = 5)
+print(cbow_similar)
+
+```
+
+Extract embeddings for target word
+
+```{r}
+
+cbow_embed_target <- predict(cbow_model, c("climate", "women"), type = "embedding")
+print(cbow_embed_target)
+
+```
+
+# Visualize Embeddings
+
+Tokenization + Vocabulary Sampling (quanteda)
+
+```{r}
+
+# Tokenize and clean
+tokens <- tokens(data$text,
+                 remove_punct = TRUE,
+                 remove_numbers = TRUE) %>%
+  tokens_tolower() %>%
+  tokens_remove(stopwords("en"))
+  
+# Create a document-feature matrix (DFM)
+dfm <- dfm(tokens)
+
+# View word features (vocabulary)
+vocab <- featnames(dfm)
+
+# Select random words from vocabulary
+set.seed(486)
+word_list = sample(vocab, 100)
+word_list
+
+```
+
+Get embeddings for sampled words
+
+```{r}
+
+cbow_embed_sample <- predict(cbow_model, word_list, type = "embedding")
+cbow_embed_sample <- na.omit(cbow_embed_sample)
+
+```
+
+Run UMAP for 2D projection
+
+```{r}
+
+cbow_umap <- umap(cbow_embed_sample, n_neighbors = 15)
+
+cbow_df  <- data.frame(word = rownames(cbow_embed_sample), 
+                       xpos = gsub(".+//", "", rownames(cbow_embed_sample)),
+                       x = cbow_umap$layout[, 1], y = cbow_umap$layout[, 2],
+                       stringsAsFactors = FALSE)
+
+ggplot(cbow_df, aes(x = x, y = y, label = word)) +
+  geom_point(color = "darkgreen") +
+  ggrepel::geom_text_repel(max.overlaps = 15) +
+  theme_minimal() +
+  labs(title = "CBOW Embeddings (UMAP Projection)",
+       x = "UMAP Dimension 1", y = "UMAP Dimension 2")
+```
+
+
+# Exercise: Train and Inspect Word2Vec skip-gram Model
+
+
+```{r}
+
+# Solution
+
+# Train Skip-Gram model
+skip_model <- word2vec(x = data$text, type = "skip-gram", dim = 15, iter = 20, min_count = 4)
+
+# Nearest neighbors
+predict(skip_model, c("climate", "women"), type = "nearest", top_n = 5)
+
+# Get embeddings for selected vocabulary
+skip_embed_target <- predict(skip_model,  c("climate", "women"), type = "embedding")
+skip_embed_target <- na.omit(skip_embed_target)
+print(skip_embed_target)
+
+# Get embeddings for sampled vocabulary
+
+skip_embed_sample <- predict(skip_model, word_list, type = "embedding")
+skip_embed_sample <- na.omit(skip_embed_sample)
+
+# Run UMAP and plot
+
+skip_umap <- umap(skip_embed_sample, n_neighbors = 15, n_threads = 2)
+
+skip_df  <- data.frame(word = rownames(skip_embed_sample), 
+                  xpos = gsub(".+//", "", rownames(skip_embed_sample)), 
+                  x = skip_umap$layout[, 1], y = skip_umap$layout[, 2], 
+                  stringsAsFactors = FALSE)
+
+ggplot(skip_df, aes(x = x, y = y, label = word)) +
+  geom_point(color = "firebrick") +
+  ggrepel::geom_text_repel(max.overlaps = 15) +
+  theme_minimal() +
+  labs(title = "Skip-Gram Embeddings (UMAP Projection)",
+       x = "UMAP Dimension 1", y = "UMAP Dimension 2")
+
+```
+
+
+# Using Embeddings
+
+## a) Comparing Embeddings
+
+You compare embeddings by measuring the similarity between vectors. The most common method is cosine similarity.
+
+You can compute this across many pairs to analyze semantic closeness.
+
+```{r}
+
+# Example 1: 
+
+# Compare embeddings of two words
+vec1 <- predict(cbow_model, "climate", type = "embedding")
+vec2 <- predict(cbow_model, "weather", type = "embedding")
+
+# Compute cosine similarity
+cos_sim <- sum(vec1 * vec2) / (sqrt(sum(vec1^2)) * sqrt(sum(vec2^2)))
+print(cos_sim)  # 1 = identical, 0 = unrelated
+
+```
+
+```{r}
+
+# Example 2: 
+
+# Compare embeddings of two words
+vec1 <- predict(cbow_model, "climate", type = "embedding")
+vec2 <- predict(cbow_model, "protest", type = "embedding")
+
+# Compute cosine similarity
+cos_sim <- sum(vec1 * vec2) / (sqrt(sum(vec1^2)) * sqrt(sum(vec2^2)))
+print(cos_sim)  # 1 = identical, 0 = unrelated
+
+
+```
+
+# Excercise: Select some pairs of words yourself and compare the embeddings
+
+```{r}
+# Solution
+
+
+```
+
+## b) Analogy Tasks
+
+```{r}
+# Get word embeddings
+vec_king   <- predict(cbow_model, "king", type = "embedding")
+vec_man    <- predict(cbow_model, "man", type = "embedding")
+vec_woman  <- predict(cbow_model, "woman", type = "embedding")
+
+# Vector arithmetic for analogy: king - man + woman
+analogy_vec <- vec_king - vec_man + vec_woman
+
+# Find nearest words to the resulting vector
+analogy_result <- predict(cbow_model, newdata = analogy_vec, type = "nearest", top_n = 5)
+
+print("Words closest to 'king - man + woman':")
+print(analogy_result)
+```
+
+# Excercise: Select three words yourself and inspect output
+
+```{r}
+# Solution
+
+
+```
+
+
+## c) Use Embeddings in Downstream Tasks
+
+Example: Document Classification Using Embeddings as Text Representation
+
+1. Preprocess: tokenization and cleaning + Train Word2Vec
+
+```{r}
+
+corp <- corpus(data$text)
+
+tokens_clean <- tokens(corp, 
+                       remove_punct = TRUE, 
+                       remove_numbers = TRUE) %>%
+  tokens_tolower() %>%
+  tokens_remove(stopwords("en"))
+
+# Reconstruct cleaned text for Word2Vec
+clean_texts <- sapply(tokens_clean, function(x) paste(x, collapse = " "))
+
+# Train CBOW model
+cbow_model <- word2vec(x = clean_texts, type = "cbow", dim = 50, iter = 20, min_count = 5)
+
+```
+
+2. Create document-level embeddings
+
+```{r}
+
+# Function to get averaged word embeddings per document
+get_doc_embedding <- function(doc, model) {
+  words <- str_split(doc, "\\s+")[[1]]  # Tokenize cleaned text (already lowercased)
+  words <- words[words %in% rownames(as.matrix(model))]  # Keep only in-vocabulary words
+  if (length(words) == 0) return(rep(NA, model@dim))  # Return NA vector if no known words
+  embeds <- predict(model, words, type = "embedding")  # Get embeddings
+  colMeans(embeds, na.rm = TRUE)  # Average vector
+}
+
+# Apply to all documents
+doc_embeddings <- t(sapply(clean_texts, get_doc_embedding, model = cbow_model))
+
+# Remove rows with NA (documents with no valid words)
+valid_rows <- complete.cases(doc_embeddings)
+doc_embeddings <- doc_embeddings[valid_rows, ]
+
+```
+
+3. Train/Test Naive Bayes with Embeddings
+
+```{r}
+
+library(e1071)  # We can not work with quanteda's textmodel_nb(), because it takes only a dfm as input)
+
+# Filter and convert labels to factor (matching the same rows)
+labels <- as.factor(data$climate_change_human[valid_rows])
+
+# Create a train/test split
+set.seed(123)  # for reproducibility
+n <- nrow(doc_embeddings)
+train_indices <- sample(1:n, size = floor(0.8 * n))  # 80% for training
+test_indices <- setdiff(1:n, train_indices)
+
+# Training data
+x_train <- doc_embeddings[train_indices, ]
+y_train <- labels[train_indices]
+
+# Test data
+x_test <- doc_embeddings[test_indices, ]
+y_test <- labels[test_indices]
+
+# Fit Naive Bayes model on training data
+nb_embed_model <- naiveBayes(x = x_train, y = y_train)
+
+# Predict
+predicted_embed <- predict(nb_embed_model, x_test)
+
+# Evaluate
+accuracy_embed <- mean(predicted_embed == y_test)
+print(paste("Embedding Model Accuracy:", round(accuracy_embed, 3)))
+
+# Confusion matrix
+table(Predicted = predicted_embed, Actual = y_test)
+
+```
+
+# Excercise 
+
+Train a Naive Bayes classifier on the same data, but this time using a DFM (document-feature matrix) as the text representation instead of embeddings. You can implement this using the quanteda package.
+
+```{r}
+# Solution
+
+corp <- corpus(data$text)
+
+tokens_clean <- tokens(corp, 
+                       remove_punct = TRUE, 
+                       remove_numbers = TRUE) %>%
+  tokens_tolower() %>%
+  tokens_remove(stopwords("en"))
+
+# Create document-feature matrix (BoW)
+dfm_bow <- dfm(tokens_clean)
+dfm_bow <- dfm_trim(dfm_bow, min_termfreq = 5)  # optional: remove rare words
+
+# Match labels to dfm
+labels_bow <- as.factor(data$climate_change_human)
+
+# Train/test split
+set.seed(123)
+n_bow <- ndoc(dfm_bow)
+train_indices_bow <- sample(1:n_bow, size = floor(0.8 * n_bow))
+test_indices_bow <- setdiff(1:n_bow, train_indices_bow)
+
+dfm_train <- dfm_bow[train_indices_bow, ]
+dfm_test  <- dfm_bow[test_indices_bow, ]
+labels_train <- labels_bow[train_indices_bow]
+labels_test  <- labels_bow[test_indices_bow]
+
+# Fit Naive Bayes on DFM
+nb_bow_model <- textmodel_nb(dfm_train, labels_train)
+
+# Predict
+predicted_bow <- predict(nb_bow_model, dfm_test, force = TRUE)
+
+# Evaluate
+accuracy_bow <- mean(predicted_bow == labels_test)
+print(paste("BoW Model Accuracy:", round(accuracy_bow, 3)))
+
+# Confusion matrix
+table(Predicted = predicted_bow, Actual = labels_test)
+
+```
+
+Let's compare both
+
+```{r}
+
+results <- data.frame(
+  Model = c("Bag-of-Words (DFM)", "Word2Vec Embeddings"),
+  Accuracy = c(accuracy_bow, accuracy_embed)
+)
+print(results)
+
+```
+
+
+
+# GloVe
+
+GloVe takes co-occurrence counts (like PMI) but factorizes the matrix into dense, low-dimensional vectors. It captures the same semantic patterns as PMI but in a compact form (e.g., 50 dimensions instead of 50,000).
+
+```{r}
+
+# Tokenize
+tokens <- tolower(data$text) %>%
+  word_tokenizer()
+
+it <- itoken(tokens, progressbar = FALSE) # iterator streams tokens efficiently in chunks
+
+# Vocabulary
+vocab <- create_vocabulary(it)
+vectorizer <- vocab_vectorizer(vocab)
+
+
+# Term-co-occurrence matrix (TCM) with window = 8
+tcm <- create_tcm(it, vectorizer, skip_grams_window = 8L) # Calculate how often each pair of words co-occurs within a sliding window of size 8 words
+
+# Train GloVe embeddings (text2vec uses GloVe)
+glove <- GlobalVectors$new(rank = 50, x_max = 10) # rank: The dimensionality of the embedding vectors (number of features per word)
+
+wv_main <- glove$fit_transform(tcm, n_iter = 20)
+
+# Combine context and main embeddings
+word_vectors <- wv_main + t(glove$components)
+
+dim(word_vectors)
+
+
+```
+
+# Using Embeddings
+
+## a) Comparing Embeddings
+
+Cosine similarity between two specific words
+
+```{r}
+cos_sim_1 <- sim2(x = word_vectors["climate", , drop = FALSE],
+                y = word_vectors["weather", , drop = FALSE],
+                method = "cosine")
+
+cos_sim_1
+
+cos_sim_2 <- sim2(x = word_vectors["climate", , drop = FALSE],
+                y = word_vectors["protest", , drop = FALSE],
+                method = "cosine")
+
+cos_sim_2
+
+```
+
+
+
+Find top N most similar words to a given word:
+
+```{r}
+similar_words <- sim2(x = word_vectors,
+                      y = word_vectors["climate", , drop = FALSE],
+                      method = "cosine") %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("word") %>%
+  dplyr::arrange(desc(climate)) %>%
+  dplyr::slice(2:11)  # Exclude the word itself
+
+print(similar_words)
+```
+
+
+## b) Analogy Tasks
+
+```{r}
+# Check that all words are in vocab
+words <- c("king", "man", "woman")
+words[!words %in% rownames(word_vectors)] 
+
+# Compute analogy vector
+analogy_vec <- word_vectors["king", ] - word_vectors["man", ] + word_vectors["woman", ]
+
+# Find closest words
+analogy_result <- sim2(x = word_vectors,
+                       y = matrix(analogy_vec, nrow = 1),
+                       method = "cosine") %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("word") %>%
+  dplyr::arrange(desc(V1)) %>%
+  dplyr::slice(1:10)
+
+print(analogy_result)
+```
+
+## c) Visualize
+
+```{r}
+# Choose a subset of words for visualization
+words_to_plot <- c("climate", "change","carbon", "energy", "protest", "government", 
+                   "weather", "greta", "thunberg", "human", "politics",
+                   "germany", "activist", "science", "oil", "coal", 
+                   "woman", "man", "king", "queen", "harry","charles", "prince")
+
+# Filter for available words
+present_words <- words_to_plot[words_to_plot %in% rownames(word_vectors)]
+
+# Subset the vectors
+vecs <- word_vectors[present_words, ]
+
+# Run UMAP on your embeddings (vecs should be your word matrix)
+set.seed(123)  # For reproducibility
+
+glove_umap <- umap(vecs, n_neighbors = 10, n_threads = 2)
+
+# Create a data frame for plotting
+umap_df <- data.frame(
+  Dim1 = glove_umap$layout[, 1],
+  Dim2 = glove_umap$layout[, 2],
+  word = present_words
+)
+
+# Plot with ggplot2
+ggplot(umap_df, aes(x = Dim1, y = Dim2, label = word)) +
+  geom_point(color = "steelblue") +
+  ggrepel::geom_text_repel(max.overlaps = 15) +
+  theme_minimal() +
+  labs(title = "Word Embeddings (UMAP Projection)",
+       x = "UMAP Dimension 1", y = "UMAP Dimension 2")
+
+```
+
+
+## d) Use Pre-Trained Embeddings for Document Classification
+
+We use an embedding model provided via Ollama. 
+Ollama is a tool that lets you run large language models (LLMs) locally on your own machine
+
+How to: 
+Download Ollama: https://ollama.com/download
+Tutorial to learn more: https://jbgruber.github.io/rollama/articles/text-embedding.html
+
+```{r}
+library(rollama)
+library(tidyverse) 
+pull_model("nomic-embed-text") # Load pre-trained embedding from R: https://ollama.com/library/nomic-embed-text 
+```
+
+Create embeddings for the documents
+
+```{r}
+
+data_embeddings_nomic <- data |>
+  mutate(embeddings = embed_text(text = text, model = "nomic-embed-text")) |>
+  select(ID, climate_change_human, embeddings) |>
+  unnest_wider(embeddings)
+
+```
+
+Use the embeddings for the text representation
+
+```{r}
+library(e1071)  # We can not work with quanteda's textmodel_nb(), because it takes only a dfm as input)
+
+# Filter and convert labels to factor (matching the same rows)
+labels <- as.factor(data$climate_change_human[valid_rows])
+
+# Create a train/test split
+set.seed(123)  # for reproducibility
+n <- nrow(data_embeddings_nomic)
+train_indices <- sample(1:n, size = floor(0.8 * n))  # 80% for training
+test_indices <- setdiff(1:n, train_indices)
+
+# Training data
+x_train <- data_embeddings_nomic[train_indices, ]
+y_train <- labels[train_indices]
+
+# Test data
+x_test <- data_embeddings_nomic[test_indices, ]
+y_test <- labels[test_indices]
+
+# Fit Naive Bayes model on training data
+nb_embed_model <- naiveBayes(x = x_train, y = y_train)
+
+# Predict
+predicted_embed <- predict(nb_embed_model, x_test)
+
+# Evaluate
+accuracy_embed_nomic <- mean(predicted_embed == y_test)
+print(paste("Embedding Model Accuracy:", round(accuracy_embed_nomic, 3)))
+
+# Confusion matrix
+table(Predicted = predicted_embed, Actual = y_test)
+```
+
+# Compare model accuracy for all three ways (BOW;Word2Vec Embeddings and Ollama Embeddings) to represent the text 
+
+```{r}
+results <- data.frame(
+  Model = c("Bag-of-Words (DFM)", "Word2Vec Embeddings", "Ollama Embeddings"),
+  Accuracy = c(accuracy_bow, accuracy_embed, accuracy_embed_nomic)
+)
+print(results)
+```
+
+
+
+Code also inspired by: 
+https://cbail.github.io/textasdata/word2vec/rmarkdown/word2vec.html
+https://www.geeksforgeeks.org/r-machine-learning/word2vec-using-r/
+
+
