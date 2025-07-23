@@ -11,6 +11,6 @@ It includes the slides, example text data sets, and R scripts `xy.Rmd`.
 
 ## Manual Benchmark Creation
 
-Coder 1:
-Coder 2:
+Coder 1: https://docs.google.com/spreadsheets/d/1297nAsUYJ4VM9_q7rAaXKjSBfhQmQKKNJjzHSXrBmwQ/edit?usp=sharing
+Coder 2: https://docs.google.com/spreadsheets/d/1DW39M_-EakREoXWm4QyEhrLkMTxms9H-wF23Gw2oetY/edit?usp=sharing
 All participants:
