@@ -1,0 +1,248 @@
+
+---
+title: "Topic Modeling LDA"
+author: "Fabienne Lind"
+date: "May 2025"
+output:
+  html_document
+---
+
+# LDA Topic Modeling
+
+
+```{r}
+library(topicmodels)
+library(quanteda)
+library(dplyr)
+library(tibble)
+```
+
+We work with a set of tweets this time. They were selected by searching for #oscarssowhite in a time period around the oscars 2020 and the oscars 2023.
+
+```{r}
+oscars <- read.csv("https://raw.githubusercontent.com/fabiennelind/text-as-data-in-R/main/data/OscarsSoWhite_sample.csv")
+
+```
+
+
+Let's inspect the text of some tweets.
+
+```{r}
+#colnames(oscars)
+head(oscars$text) 
+```
+
+We first do some preprocessing.
+
+```{r}
+oscarscorpus <- corpus(oscars$text)
+toks_oscars <- tokens(oscarscorpus, remove_punct = TRUE, remove_numbers = TRUE, remove_symbol = TRUE)
+
+toks_oscars <- tokens_select(toks_oscars, pattern = c(stopwords("en"),"*-time", "updated-*", "gmt", "bst"), selection = "remove")
+print(toks_oscars)
+
+```
+
+
+Let's create a dfm. 
+
+```{r}
+dfm_oscars <- dfm(toks_oscars) 
+```
+
+And inspect the dfm by plotting a wordcloud. 
+
+```{r}
+library(quanteda.textplots)
+textplot_wordcloud(dfm_oscars, min_count = 5)
+```
+
+Why is #oscarssowhite so prominent? What does rt mean? What is the meaning of words that start with @? How do we deal with these features?
+
+**Exercise:**
+
+Remove the hashtag "#oscarssowhite", "rt", usernames and hyperlinks from the token object.
+Remove all tokens that appear less then or equal to two times.
+Create a new dfm and visualize the remaining tokens in a word cloud.
+
+```{r}
+#Solution
+toks_oscars <- tokens_select(toks_oscars, pattern = c("#oscarssowhite", "rt", "^@\\w+", "https?://\\S+"), selection = "remove", valuetype="regex")
+dfm_oscars <- dfm(toks_oscars) 
+dfm_oscars <- dfm_trim(dfm_oscars, min_termfreq = 3)
+textplot_wordcloud(dfm_oscars, min_count = 5)
+
+```
+
+The number of topics in a topic model is somewhat arbitrary, so you need to play with the number of topics to see if you get anything more meaningful. We start here with 10 topics. The LDA function uses the topicmodels package.
+
+
+```{r}
+# estimate LDA with K topics
+K <- 10
+lda.model <- LDA(dfm_oscars, k = K, method = "Gibbs", 
+                control = list(verbose=25L, seed = 123, burnin = 100, iter = 500))
+```
+
+When the calculation fails: 
+
+If you have zero value entries, you need to remove them before you can run the lda. So, we first remove the docs without words and run the lda code snipped again.
+
+
+```{r}
+#Solution
+rowTotals <- apply(dfm_oscars , 1, sum)#Find the sum of words in each Document
+dfm_oscars   <- dfm_oscars[rowTotals> 0, ]#remove all docs without words
+
+# estimate LDA with K topics
+K <- 10
+lda.model <- LDA(dfm_oscars, k = K, method = "Gibbs", 
+                control = list(verbose=25L, seed = 123, burnin = 100, iter = 500))
+```
+
+After the actual model has been calculated, we can now output two central components of the model:
+
+# 1) The terms that are particularly strongly linked to each of the topics 
+
+We can use `get_terms` to the get top `n` terms from the topic model per topic. This will help us interpret the results of the model.
+Check out the dataframe `terms` to see the top words.
+
+The following table shows the ten most closely related terms for each of the ten topics. What do you need to change to see the top 15 words?
+
+```{r}
+as.data.frame(terms(lda.model, 10))
+```
+
+
+# 2) the documents in which the topics are particularly strong
+
+```{r}
+data.frame(Topic = topics(lda.model))
+```
+
+
+With this code we get the probability per topic per document and calculate also which topic is the most likely per document. 
+
+```{r}
+#get the topic probabilities per topic
+topics <- posterior(lda.model)$topics %>% 
+  as_tibble() %>% 
+  rename_all(~paste0("Topic_", .))
+
+# Function to determine the column with the highest number per row
+getHighestColumn <- function(row) {
+  column_names <- colnames(topics)
+  highest_column <- column_names[which.max(row)]
+  return(highest_column)
+}
+
+# Apply the function to each row and assign the result to a new column
+topics$most_likely_topic <- apply(topics, 1, getHighestColumn)
+
+# Output the modified dataframe
+print(topics)
+
+#get the ids from the dfm 
+
+meta = docvars(dfm_oscars) %>% 
+  add_column(doc_id=docnames(dfm_oscars),.before=1)
+
+#create a new dataframe with the ids and topic probabilities
+
+tpd <- bind_cols(meta, topics) 
+head(tpd)
+```
+
+
+How do we now add the topic probabilities to the original dataframe oscars?
+
+```{r}
+
+doc_id <- paste0("text",rownames(oscars))
+oscars$doc_id <- doc_id
+oscars <- left_join(oscars, tpd , by = "doc_id")
+```
+
+
+#Validation
+
+You can inspect if the words per topic point to a semantically coherent concept.
+You can check if the topic label that you assigned matches the content of documents where this topic is highly prevalent.
+For many more options see: Bernhard-Harrer, J., Ashour, R., Eberl, J. M., Tolochko, P., & Boomgaarden, H. (2025). Beyond standardization: a comprehensive review of topic modeling validation methods for computational social science research. Political Science Research and Methods, 1-19.
+
+
+# Find the Best Number of Topics (K)
+
+Assess the optimal number of topics. In R with topicmodels, the most practical way is to compute perplexity or log-likelihood across different values of K.
+
+Prepare set-up.
+
+```{r}
+library(topicmodels)
+
+# Create a sequence of topic numbers to try
+k_list <- seq(2, 30, by = 2)
+
+# Remove empty docs (already done earlier, but just to be sure)
+rowTotals <- apply(dfm_oscars , 1, sum)
+dfm_oscars_k <- dfm_oscars[rowTotals > 0, ]
+
+# Convert dfm to topicmodels format
+dtm <- convert(dfm_oscars_k, to = "topicmodels")
+
+
+```
+
+Loop through each K and compute log-likelihood
+
+```{r}
+
+results <- data.frame(K = integer(), logLik = numeric()) # Initialize storage
+
+for (k in k_list) {
+  model <- LDA(dtm, k = k, method = "Gibbs", 
+               control = list(seed = 123, burnin = 100, iter = 500))
+  ll <- logLik(model)
+  results <- rbind(results, data.frame(K = k, logLik = ll))
+}
+
+
+```
+
+Plot log-likelihood by number of topics
+
+```{r}
+library(ggplot2)
+
+ggplot(results, aes(x = K, y = logLik)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Log-Likelihood by Number of Topics", x = "Number of Topics (K)", y = "Log-Likelihood")
+
+```
+Interpretation:  A higher log-likelihood means the model better fits the data,
+ Look for the elbow point in the curve. the point after which adding more topics yields diminishing returns.
+
+**Exercise:**
+
+Run LDA again with the best K as just identified 
+
+```{r}
+# estimate LDA with K topics
+K <- 14
+lda.model <- LDA(dfm_oscars, k = K, method = "Gibbs", 
+                control = list(verbose=25L, seed = 123, burnin = 100, iter = 500))
+```
+```{r}
+as.data.frame(terms(lda.model, 10))
+```
+
+
+# **Exercise:**
+
+Run LDA for your datasets
+
+
+```{r}
+
+```
