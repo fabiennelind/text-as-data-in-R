@@ -1,0 +1,352 @@
+---
+title: "GPT_prompting.Rdm"
+author: "Fabienne Lind"
+date: "April 2026"
+output: html_document
+---
+
+Note: The following code was adapted by this blog post: https://rpubs.com/nirmal/setting_chat_gpt_R. 
+and by the script shared as part of the supplementary materials of the following paper: 
+Rathje, S., Mirea, D., Sucholutsky, I., Marjieh, R., Robertson, C., & Van Bavel, J. J. (2023, May 19). GPT is an effective tool for multilingual psychological text analysis. https://doi.org/10.31234/osf.io/sekf5
+The script is explained in this video: https://www.youtube.com/watch?v=Mm3uoK4Fogc
+
+
+
+### Install Required Packages
+
+```{r}
+library(httr)
+library(tidyverse)
+```
+
+
+# Get API key
+
+The first thing to to is to get a ChatGPT API key from here: https://platform.openai.com/overview 
+
+Then, you could put your API key in the quotes below: 
+
+```{r}
+my_API <- "put_your_API_key_here"
+```
+
+The much saver option however (recommended!) is to save an API key in a save file. For example in an enviroment variable or in a file that is stored in a save folder. This way you do not share it directly in your script
+
+How to do this: 
+Option A: Environment variable
+
+1. Set the environment variable. You need to do this only once. You can delete this line from your script later on.
+
+
+```{r}
+#Sys.setenv(GPT_API_KEY = "put_your_API_key_here")
+```
+
+2. Access the environment variable in your script. After storing the API key in your environment you can from now on call it with the following function.
+
+```{r}
+my_API <- Sys.getenv("GPT_API_KEY")
+```
+
+Option B: Excel file on your computer
+
+```{r}
+library(readxl)
+setwd("/Users/fabienne/ucloud/Research/APIs")
+api_keys <- read_excel("api_keys_recoded.xlsx")
+my_API <- api_keys$GPT_API_KEY_courses
+
+```
+
+
+# GPT prompting
+
+The "hey_chatGPT function will help you access the API and prompt GPT 
+
+
+```{r}
+library(httr)
+library(jsonlite)
+library(stringr)
+
+# Make sure your API key is set
+# my_API <- Sys.getenv("OPENAI_API_KEY")  # or set it directly (not recommended to hardcode)
+
+hey_chatGPT <- function(answer_my_question, 
+                        model = "gpt-4o-mini", 
+                        temperature = 0, 
+                        max_retries = 5, 
+                        backoff_sec = 2) {
+  url <- "https://api.openai.com/v1/chat/completions"
+  
+  for (attempt in 1:max_retries) {
+    res <- tryCatch({
+      POST(
+        url = url,
+        add_headers(Authorization = paste("Bearer", my_API)),
+        content_type_json(),
+        encode = "json",
+        body = list(
+          model = model,
+          temperature = temperature,
+          messages = list(
+            list(role = "user", content = answer_my_question)
+          )
+        )
+      )
+    }, error = function(e) e)
+    
+    # Handle client-side errors
+    if (inherits(res, "error")) {
+      message(sprintf("Request error on attempt %d: %s", attempt, res$message))
+      if (attempt < max_retries) Sys.sleep(backoff_sec * attempt) else return(character(0))
+      next
+    }
+    
+    # Check HTTP status
+    if (http_error(res)) {
+      # Try to parse error details
+      parsed <- tryCatch(content(res, as = "parsed", type = "application/json"), error = function(e) NULL)
+      if (!is.null(parsed) && !is.null(parsed$error) && !is.null(parsed$error$message)) {
+        message(sprintf("API error (status %s) attempt %d: %s", status_code(res), attempt, parsed$error$message))
+      } else {
+        message(sprintf("HTTP error (status %s) on attempt %d", status_code(res), attempt))
+      }
+      if (attempt < max_retries) Sys.sleep(backoff_sec * attempt) else return(character(0))
+      next
+    }
+    
+    # Parse response JSON
+    parsed <- tryCatch(content(res, as = "parsed", type = "application/json"), error = function(e) NULL)
+    if (is.null(parsed) || is.null(parsed$choices) || length(parsed$choices) < 1 ||
+        is.null(parsed$choices[[1]]$message$content)) {
+      message(sprintf("Malformed response on attempt %d; retrying.", attempt))
+      if (attempt < max_retries) Sys.sleep(backoff_sec * attempt) else return(character(0))
+      next
+    }
+    
+    answer <- str_trim(parsed$choices[[1]]$message$content)
+    # Normalize: keep only 1 or 2; if model returns extra text, extract first digit 1/2
+    digits <- str_extract_all(answer, "[12]")[[1]]
+    if (length(digits) >= 1) {
+      return(digits[1])
+    } else {
+      # If the model didn't follow instructions, treat as failure once and retry
+      message(sprintf("Unexpected answer on attempt %d: '%s'", attempt, answer))
+      if (attempt < max_retries) Sys.sleep(backoff_sec * attempt) else return(NA_character_)
+    }
+  }
+  
+  # If all retries exhausted
+  return(NA_character_)
+}
+
+
+
+```
+
+
+
+# Read in the dataset with the text column
+
+We work here with the movie review data. 
+
+This data was first used in Bo Pang and Lillian Lee, ``Seeing stars: Exploiting class relationships for sentiment categorization with respect to rating scales.'', Proceedings of the ACL, 2005. Please find more information on the dataset here.
+https://huggingface.co/datasets/rotten_tomatoes
+
+
+Using the OpenAPI costs something.
+To not overburden the budget, we just test our code with a subset of the data. We use 20% of the data, the part for which we also predicted polarity with nb and svm.
+
+
+```{r}
+
+setwd("/Users/fabienne/ucloud/Lehre/Automated Text Analysis/PhD course text analysis/2024/data")
+reviews_test <- read.csv("rotten_tomatoes_nb_svm_test.csv")
+
+```
+
+Let's briefly inspect the text column, named value here.
+
+```{r}
+head(reviews_test$text)
+```
+
+# Create a "gpt" column
+
+We now add a new column to the dataframe. At the moment we just assign NAs. Out goal is now to fill this column with numbers that represent the polarity of the sentence.
+
+```{r}
+reviews_test$polarity_gpt <- NA
+```
+
+# Run a loop over your dataset and prompt ChatGPT 
+
+The following loop includes a prompt for polarity. We allow two classes at the moment positive and negative. 
+
+Note: In case you plan to use this for other data, replace `reviews_test` with the name of your dataframe and make sure that this line of code `text <- reviews_test[i,1]` assigns the column where your text is stored to the object text. 
+```{r}
+
+# Use only a small set
+set.seed(42)  # optional, for reproducibility
+idx <- sample(nrow(reviews_test), size = 10, replace = FALSE)
+reviews_test_sample <- reviews_test[idx, , drop = FALSE]
+
+```
+
+```{r}
+
+for (i in seq_len(nrow(reviews_test_sample))) {
+  cat("Processing row", i, "\n")
+  question <- "Is the sentiment of this text positive or negative? Answer only with a number: 1 if positive and 2 if negative. Here is the text:"
+  text <- reviews_test_sample[i, 1]  # adjust column index/name if needed
+  prompt <- paste(question, text)
+  
+  result <- hey_chatGPT(prompt)
+  cat("Raw result:", result, "\n")
+  reviews_test_sample$polarity_gpt[i] <- result
+}
+
+
+```
+
+
+
+#Take only the first string from gpt and convert to a numeric 
+
+```{r}
+reviews_test$polarity_gpt <- substr(reviews_test$polarity_gpt, 1, 1)  
+reviews_test$polarity_gpt <- as.numeric(reviews_test$polarity_gpt)
+
+```
+
+#Save the result
+
+```{r}
+setwd("/Users/fabienne/ucloud/Lehre/Automated Text Analysis/Summer School for Women Political Methodology Bremen/2026/data")
+write.csv(reviews_test_sample, "rotten_tomatoes_gpt.csv", row.names = F)
+reviews_test <- read.csv("rotten_tomatoes_gpt.csv")
+
+```
+
+
+#Comparison of manual coding decision with GPT proposal
+
+We now inspect how well the manual annotations (stored in the column polarity) match up with the gpt annotations (column polarity_gpt).
+
+#Recoding
+
+First we need to bring the data into the same format.
+We convert the polarity column to numbers
+
+```{r}
+
+reviews_test <- reviews_test %>%
+    mutate(polarity = case_when(
+      polarity == 'positive' ~ 1,
+      polarity == 'negative' ~ 2
+    ))
+
+reviews_test <- reviews_test %>%
+    mutate(polarity_nb = case_when(
+      polarity_nb == 'positive' ~ 1,
+      polarity_nb == 'negative' ~ 2
+    ))
+
+reviews_test <- reviews_test %>%
+    mutate(polarity_svm = case_when(
+      polarity_svm == 'positive' ~ 1,
+      polarity_svm == 'negative' ~ 2
+    ))
+
+```
+
+
+### Compute precision, recall and F1 per class.
+
+```{r}
+
+metrics <- function(reviews_test, categ) {
+  results_table <- table(ifelse(reviews_test$polarity == categ, 1, 0), ifelse(reviews_test$polarity_gpt == categ, 1, 0))
+  recall <- results_table[2, 2] / (results_table[2, 2] + results_table[2, 1])
+  precision <- results_table[2, 2] / (results_table[2, 2] + results_table[1, 2])
+  f1 <- 2 * recall * precision / (recall + precision)
+
+  return(c(precision, recall, f1))
+}
+
+```
+
+
+### Package all per-class metrics in one matrix
+
+```{r}
+
+package_metrics <- function(data, n_classes) { #n_classes is the number of categories here 2 (negative and positive)
+  res <- matrix(NA, n_classes, 3) #3 relates to three metrics here precision, recall and F1
+  for (c in 1:n_classes) {
+    res[c, ] <- metrics(data, c)
+  }
+  return(res)
+}
+
+```
+
+### Compute average F1 for the polarity analysis task
+
+```{r}
+macro_f1_sent <- function(reviews_test){
+  res_pos <- metrics(reviews_test,1)# Metrics for positive class
+  res_neg <- metrics(reviews_test,2)# Metrics for negative class
+  avg_f1 <- mean(c(res_pos[3], res_neg[3])) ## Calculate average F1 score
+  avg_f1
+  return(avg_f1)
+}
+```
+
+### Compute accuracy 
+
+The diag() function extracts the diagonal elements of the contingency table, which correspond to the correctly predicted instances for each class.
+
+The accuracy is then computed by dividing the sum of the correctly predicted instances by the total number of instances in the dataset (sum(res_table)).
+
+```{r}
+accuracy <- function(reviews_test){
+  res_table <- table(reviews_test$polarity, reviews_test$polarity_gpt)
+  acc <- sum(diag(res_table))/sum(res_table)
+  return(acc)
+}
+```
+
+
+### Run functions
+
+Precision, recall, F1
+
+```{r}
+res_pos_sent <- metrics(reviews_test,1) # precision, recall, F1 for the 'positive' label in sentiment analysis
+res_pos_sent
+
+res_neg_sent <- metrics(reviews_test,2) # precision, recall; F1 for the 'negative' label in sentiment analysis
+res_neg_sent
+```
+
+
+
+matrix with metrics for polarity analysis
+
+```{r}
+res_sent <- package_metrics(reviews_test, 2)
+res_sent
+```
+
+average F1
+
+```{r}
+avg_f1 <- macro_f1_sent(reviews_test) 
+avg_f1
+```
+
+
+
+
