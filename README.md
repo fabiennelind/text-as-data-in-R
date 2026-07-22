@@ -12,6 +12,8 @@ Coder 1: https://docs.google.com/spreadsheets/d/1yp8Hf7_2Yxow4dwQlM9jBLslq82bfCl
 
 Coder 2: https://docs.google.com/spreadsheets/d/1DxINtowUjGJDxO7yUf5kaN7De9uevjoUJN4qLCuqfgM/edit?usp=sharing
 
+All: https://docs.google.com/spreadsheets/d/1v5TlUPPasNzC3l31CGAJVioGFJ-f9t0mFjv6V8UGnZ4/edit?usp=sharing
+
 ## Multilingual Text Analysis 
 
 All workshop materials: https://github.com/fabiennelind/Going-Cross-Lingual_Course
